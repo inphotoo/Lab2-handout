@@ -14,7 +14,7 @@ int main() {
     std::printf("load ground truth\n");
     int gnd_n_vec = 100;
     int gnd_vec_dim = 10;
-    char *path= "./data/siftsmall/gnd.ivecs";
+    char *path = "./data/siftsmall/gnd.ivecs";
     int *gnd = read_ivecs(gnd_n_vec, gnd_vec_dim, path);
 
     std::printf("load query\n");

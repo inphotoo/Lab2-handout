@@ -30,12 +30,13 @@ namespace HNSWLab {
         class hnswLayer{
         public:
             std::vector<hnswNode*> nodes ; // 这一层结点们
-            int level; //当前的层数
+
         };
         std::vector<hnswLayer *> layers; // 所有层
         hnswNode * enterPoint = nullptr; // 进入的节点
         int maxL = 0;// ep对应的层
     public:
+        int vec_dim = 3; //当前的层数
         // you can add more parameter to initialize HNSW
         HNSW() {}
 
@@ -56,7 +57,6 @@ namespace HNSWLab {
      * label: the label(id) of the vector
     */
     void HNSW::insert(const int *item, int label) {
-
         std::vector<hnswNode*> W; //现在发现的最近邻元素集合
         int L = get_random_level(); //决定q从哪一层开始插入
         hnswNode *ep = enterPoint; // 把进入点设置为enterPoint
@@ -65,13 +65,16 @@ namespace HNSWLab {
             //从每一层中，找到一个最近的节点
             W = search_layer(item , ep , 1 );
             ep = W[0];
+            ep = ep->child;
         }
 
         //有Bug,每一层的节点应该不同
         //后续要么二维数组，要么多几个Node
         hnswNode *q = new hnswNode(item,label);
         while(L >= layers.size())
+        {
             layers.push_back(new hnswLayer());
+        }
         hnswNode *insertNode = q;
         layers[0]->nodes.push_back(insertNode);
         for(int i = 0 ; i < L ; i++)
@@ -111,11 +114,13 @@ namespace HNSWLab {
                 //最近的，作为下一层入口
                 ep = neighbors[0];
                 ep = ep->child;
+                q = q->child;
             }
         }
         if(L > maxL || enterPoint == nullptr)
         {
             enterPoint = layers[L]->nodes[0];
+            maxL = L;
         }
         //TODO
     }
@@ -127,7 +132,23 @@ namespace HNSWLab {
      * @return a vector of labels of the k nearest neighbors
     */
     std::vector<int> HNSW::query(const int *query, int k) {
+        std::vector<hnswNode*> W; //现在发现的最近邻元素集合
+        hnswNode *ep = enterPoint; // 把进入点设置为enterPoint
+        for(int lc = maxL ; lc >= 1 ; lc --)
+        {
+            //从每一层中，找到一个最近的节点
+            W = search_layer(query , ep , 1 );
+            ep = W[0];
+            ep = ep->child;
+        }
+        //寻找最近的ef个节点。
+        std::vector<hnswNode*> neighbors = search_layer(query , ep , k);
+
         std::vector<int> res;
+        for(auto neighbor : neighbors)
+        {
+            res.push_back(neighbor->label);
+        }
         //TODO 
         return res;
     }
@@ -144,7 +165,7 @@ namespace HNSWLab {
      */
     std::vector<HNSW::hnswNode *> HNSW::search_layer(const int *item, HNSW::hnswNode *ep, int ef) {
 
-        int vec_dim = sizeof (item)/ sizeof(int);
+        int vec_dim = this->vec_dim;
         auto lessCmp = [item , vec_dim](hnswNode* node1 , hnswNode* node2)
         {
             return l2distance(node1->item , item , vec_dim) < l2distance(node2->item , item , vec_dim);
@@ -216,9 +237,9 @@ namespace HNSWLab {
         if(W.size() <= M ) return W;
         else
         {
-            auto cmp = [item](hnswNode* node1 , hnswNode* node2)
+            int vec_dim = this->vec_dim;
+            auto cmp = [vec_dim,item](hnswNode* node1 , hnswNode* node2)
             {
-                int vec_dim = sizeof (item)/ sizeof(item[0]);
                 return l2distance(node1->item , item , vec_dim) < l2distance(node2->item , item , vec_dim);
             };
             //decltype(cmp) 用于获取 lambda 表达式 cmp 的类型
@@ -230,7 +251,7 @@ namespace HNSWLab {
             {
                 //插入节点，如果超出上限就再pop一个
                 maxHeap.push(node);
-                if(size > M)
+                if(size >= M)
                     maxHeap.pop();
                 //超出目标个数，
                 size++;
