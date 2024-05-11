@@ -86,28 +86,34 @@ namespace HNSWLab {
         }
 
         // ⾃L层向第0层逐层搜索
-        for( int lc = (maxL > L ?  L : maxL) ;  lc > 0 ;  lc--)
+        for( int lc = (maxL > L ?  L : maxL) ;  lc >= 0 ;  lc--)
         {
             //找到每一层中，最近的ef_construction个节点
             W = search_layer(item , ep , ef_construction );
             //对于每一个节点，相互添加邻居,新节点至多添加M个邻居
             std::vector<hnswNode*> neighbors = select_neighbors(item , M, W);
+            q->neighbors = neighbors;
             //对于每一个neighbor，都只能有至多M个neighbrs
             //如果超出，那么只选近的
             //感觉这里可优化，添加一个是否满了的变量，减少时间
             for(auto neighbor : neighbors)
             {
+                neighbor->neighbors.push_back(q);
                 if(neighbor->neighbors.size() > M )
                 {
                     //选取对于neighbor最近的M个邻居
                     neighbor->neighbors = select_neighbors(  neighbor->item , M , neighbor->neighbors);
+
                 }
             }
-            //最近的，作为下一层入口
-            ep = neighbors[0];
-            ep = ep->child;
+            if(!neighbors.empty())
+            {
+                //最近的，作为下一层入口
+                ep = neighbors[0];
+                ep = ep->child;
+            }
         }
-        if(L > maxL)
+        if(L > maxL || enterPoint == nullptr)
         {
             enterPoint = layers[L]->nodes[0];
         }
@@ -137,7 +143,8 @@ namespace HNSWLab {
      * @return 该元素ef个近邻节点
      */
     std::vector<HNSW::hnswNode *> HNSW::search_layer(const int *item, HNSW::hnswNode *ep, int ef) {
-        int vec_dim = sizeof (item)/ sizeof(item[0]);
+
+        int vec_dim = sizeof (item)/ sizeof(int);
         auto lessCmp = [item , vec_dim](hnswNode* node1 , hnswNode* node2)
         {
             return l2distance(node1->item , item , vec_dim) < l2distance(node2->item , item , vec_dim);
@@ -147,6 +154,7 @@ namespace HNSWLab {
             return l2distance(node1->item , item , vec_dim) > l2distance(node2->item , item , vec_dim);
         };
         std::vector<HNSW::hnswNode *> v; //已近访问过的
+        if(ep == nullptr) return v;
         std::priority_queue<hnswNode* , std::vector<hnswNode*> , decltype(moreCmp)> minHeap_C(moreCmp);
         std::priority_queue<hnswNode* , std::vector<hnswNode*> , decltype(lessCmp)> maxHeap_W(lessCmp);
         v.push_back(ep);
