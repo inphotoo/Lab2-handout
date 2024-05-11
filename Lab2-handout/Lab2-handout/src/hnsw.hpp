@@ -13,7 +13,7 @@
 
 namespace HNSWLab {
 
-    
+
     class HNSW : public AlgorithmInterface {
     private:
         //每一个结点
@@ -36,7 +36,7 @@ namespace HNSWLab {
         hnswNode * enterPoint = nullptr; // 进入的节点
         int maxL = 0;// ep对应的层
     public:
-        int vec_dim = 3; //当前的层数
+        int vec_dim = 128; //当前的层数
         // you can add more parameter to initialize HNSW
         HNSW() {}
 
@@ -68,7 +68,7 @@ namespace HNSWLab {
             ep = ep->child;
         }
 
-        //有Bug,每一层的节点应该不同
+        //有Bug,每一层的节点应该不同(wu le)
         //后续要么二维数组，要么多几个Node
         hnswNode *q = new hnswNode(item,label);
         while(L >= layers.size())
@@ -106,18 +106,17 @@ namespace HNSWLab {
                 {
                     //选取对于neighbor最近的M个邻居
                     neighbor->neighbors = select_neighbors(  neighbor->item , M , neighbor->neighbors);
-
                 }
             }
             if(!neighbors.empty())
             {
                 //最近的，作为下一层入口
-                ep = neighbors[0];
+                ep = neighbors[neighbors.size() -1];
                 ep = ep->child;
                 q = q->child;
             }
         }
-        if(L > maxL || enterPoint == nullptr)
+        if(L >= maxL || enterPoint == nullptr)
         {
             enterPoint = layers[L]->nodes[0];
             maxL = L;
@@ -137,19 +136,19 @@ namespace HNSWLab {
         for(int lc = maxL ; lc >= 1 ; lc --)
         {
             //从每一层中，找到一个最近的节点
-            W = search_layer(query , ep , 1 );
+            W = search_layer(query , ep , 1);
             ep = W[0];
             ep = ep->child;
         }
         //寻找最近的ef个节点。
-        std::vector<hnswNode*> neighbors = search_layer(query , ep , k);
-
+        std::vector<hnswNode*> neighbors = search_layer(query , ep , ef_construction);
+        neighbors = select_neighbors(query , k , neighbors);
         std::vector<int> res;
         for(auto neighbor : neighbors)
         {
             res.push_back(neighbor->label);
         }
-        //TODO 
+        //TODO
         return res;
     }
 
@@ -160,11 +159,9 @@ namespace HNSWLab {
      * @param item 插入的新元素的值（向量）
      * @param ep 入口元素
      * @param ef 需要返回的近邻数量
-     * @param lc 层数
      * @return 该元素ef个近邻节点
      */
     std::vector<HNSW::hnswNode *> HNSW::search_layer(const int *item, HNSW::hnswNode *ep, int ef) {
-
         int vec_dim = this->vec_dim;
         auto lessCmp = [item , vec_dim](hnswNode* node1 , hnswNode* node2)
         {
