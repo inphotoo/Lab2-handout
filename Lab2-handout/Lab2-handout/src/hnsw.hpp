@@ -44,7 +44,7 @@ namespace HNSWLab {
 
         std::vector<int> query(const int *query, int k);
 
-        std::vector<hnswNode* > search_layer(const int *item , hnswNode * ep , int ef );
+        std::vector<hnswNode* > search_layer(const int *item , hnswNode * ep , int ef , int lc);
 
         std::vector<hnswNode* > select_neighbors(const int *item , int M , std::vector<hnswNode* > W);
 
@@ -63,7 +63,7 @@ namespace HNSWLab {
         for(int lc = maxL ; lc >= L + 1 ; lc --)
         {
             //从每一层中，找到一个最近的节点
-            W = search_layer(item , ep , 1 );
+            W = search_layer(item , ep , 1 , lc);
             ep = W[0];
             ep = ep->child;
         }
@@ -92,7 +92,7 @@ namespace HNSWLab {
         for( int lc = (maxL > L ?  L : maxL) ;  lc >= 0 ;  lc--)
         {
             //找到每一层中，最近的ef_construction个节点
-            W = search_layer(item , ep , ef_construction );
+            W = search_layer(item , ep , ef_construction ,lc);
             //对于每一个节点，相互添加邻居,新节点至多添加M个邻居
             std::vector<hnswNode*> neighbors = select_neighbors(item , M, W);
             q->neighbors = neighbors;
@@ -136,12 +136,12 @@ namespace HNSWLab {
         for(int lc = maxL ; lc >= 1 ; lc --)
         {
             //从每一层中，找到一个最近的节点
-            W = search_layer(query , ep , 1);
+            W = search_layer(query , ep , 1 , lc);
             ep = W[0];
             ep = ep->child;
         }
         //寻找最近的ef个节点。
-        std::vector<hnswNode*> neighbors = search_layer(query , ep , ef_construction);
+        std::vector<hnswNode*> neighbors = search_layer(query , ep , ef_construction , 0);
         neighbors = select_neighbors(query , k , neighbors);
         std::vector<int> res;
         for(auto neighbor : neighbors)
@@ -161,7 +161,8 @@ namespace HNSWLab {
      * @param ef 需要返回的近邻数量
      * @return 该元素ef个近邻节点
      */
-    std::vector<HNSW::hnswNode *> HNSW::search_layer(const int *item, HNSW::hnswNode *ep, int ef) {
+    std::vector<HNSW::hnswNode *> HNSW::search_layer(const int *item, HNSW::hnswNode *ep, int ef , int lc) {
+
         int vec_dim = this->vec_dim;
         auto lessCmp = [item , vec_dim](hnswNode* node1 , hnswNode* node2)
         {
@@ -178,6 +179,15 @@ namespace HNSWLab {
         v.push_back(ep);
         minHeap_C.push(ep);
         maxHeap_W.push(ep);
+        if(layers.size() > lc && layers[lc]->nodes.size()  > 1)
+        {
+            std::random_device rd; // 用于获取随机数种子
+            std::mt19937 gen(rd()); // 使用 Mersenne Twister 引擎作为随机数生成器
+            std::uniform_int_distribution<int> dis(0, layers[lc]->nodes.size()- 1 ); // 定义均匀分布的随机数分布对象
+            int randomNum = dis(gen); // 生成随机数
+            hnswNode *randomNode = layers[lc]->nodes[randomNum];
+            minHeap_C.push(randomNode);
+        }
 
         while(!minHeap_C.empty())
         {
